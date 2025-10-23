@@ -1,20 +1,29 @@
 #!/bin/bash
-# Deployment script for AZ Health Check Lambda Function
+# Deployment script for AZ Health Check Lambda Function using Terraform
 
 set -e
 
 # Configuration
+TERRAFORM_DIR="terraform"
 FUNCTION_NAME="${FUNCTION_NAME:-az-health-check}"
 REGION="${AWS_REGION:-us-east-1}"
-STACK_NAME="${STACK_NAME:-az-health-check-stack}"
 
 echo "=========================================="
 echo "AZ Health Check Lambda Deployment"
 echo "=========================================="
 echo "Function Name: $FUNCTION_NAME"
 echo "Region: $REGION"
-echo "Stack Name: $STACK_NAME"
+echo "Terraform Dir: $TERRAFORM_DIR"
 echo "=========================================="
+
+# Check if Terraform is installed
+if ! command -v terraform &> /dev/null; then
+    echo "ERROR: Terraform is not installed"
+    echo "Install from: https://www.terraform.io/downloads"
+    exit 1
+fi
+
+echo "✓ Terraform installed ($(terraform version -json | grep -o '"terraform_version":"[^"]*' | cut -d'"' -f4))"
 
 # Check if AWS CLI is installed
 if ! command -v aws &> /dev/null; then
@@ -28,87 +37,94 @@ if ! aws sts get-caller-identity &> /dev/null; then
     exit 1
 fi
 
-echo "✓ AWS CLI configured"
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+echo "✓ AWS credentials configured (Account: $ACCOUNT_ID)"
 
-# Create deployment package
-echo ""
-echo "Creating deployment package..."
-if [ -f function.zip ]; then
-    rm function.zip
-fi
+# Navigate to Terraform directory
+cd "$TERRAFORM_DIR"
 
-zip -q function.zip lambda_function.py
-echo "✓ Deployment package created: function.zip"
-
-# Check if CloudFormation stack exists
-STACK_EXISTS=$(aws cloudformation describe-stacks \
-    --stack-name "$STACK_NAME" \
-    --region "$REGION" \
-    2>&1 | grep -c "does not exist" || true)
-
-if [ "$STACK_EXISTS" -eq 1 ]; then
+# Initialize Terraform if not already done
+if [ ! -d ".terraform" ]; then
     echo ""
-    echo "Creating new CloudFormation stack..."
-    aws cloudformation create-stack \
-        --stack-name "$STACK_NAME" \
-        --template-body file://cloudformation-template.yaml \
-        --parameters ParameterKey=FunctionName,ParameterValue="$FUNCTION_NAME" \
-        --capabilities CAPABILITY_NAMED_IAM \
-        --region "$REGION"
-
-    echo "Waiting for stack creation to complete..."
-    aws cloudformation wait stack-create-complete \
-        --stack-name "$STACK_NAME" \
-        --region "$REGION"
-
-    echo "✓ Stack created successfully"
+    echo "Initializing Terraform..."
+    terraform init
+    echo "✓ Terraform initialized"
 else
     echo ""
-    echo "Updating existing CloudFormation stack..."
-    aws cloudformation update-stack \
-        --stack-name "$STACK_NAME" \
-        --template-body file://cloudformation-template.yaml \
-        --parameters ParameterKey=FunctionName,ParameterValue="$FUNCTION_NAME" \
-        --capabilities CAPABILITY_NAMED_IAM \
-        --region "$REGION" || true
-
-    echo "Waiting for stack update to complete..."
-    aws cloudformation wait stack-update-complete \
-        --stack-name "$STACK_NAME" \
-        --region "$REGION" 2>/dev/null || true
-
-    echo "✓ Stack updated successfully"
+    echo "Terraform already initialized"
 fi
 
-# Update function code
+# Create terraform.tfvars if it doesn't exist
+if [ ! -f "terraform.tfvars" ]; then
+    echo ""
+    echo "Creating terraform.tfvars from example..."
+    cat > terraform.tfvars <<EOF
+function_name      = "$FUNCTION_NAME"
+aws_region        = "$REGION"
+lambda_timeout    = 30
+lambda_memory_size = 256
+log_retention_days = 7
+
+tags = {
+  Name        = "$FUNCTION_NAME"
+  Purpose     = "AZ Health Monitoring"
+  ManagedBy   = "Terraform"
+}
+EOF
+    echo "✓ Created terraform.tfvars"
+fi
+
+# Validate Terraform configuration
 echo ""
-echo "Updating Lambda function code..."
-aws lambda update-function-code \
-    --function-name "$FUNCTION_NAME" \
-    --zip-file fileb://function.zip \
-    --region "$REGION" > /dev/null
+echo "Validating Terraform configuration..."
+terraform validate
+echo "✓ Configuration is valid"
 
-echo "✓ Function code updated"
+# Show Terraform plan
+echo ""
+echo "Planning Terraform changes..."
+terraform plan -out=tfplan
 
-# Get function ARN
-FUNCTION_ARN=$(aws lambda get-function \
-    --function-name "$FUNCTION_NAME" \
-    --region "$REGION" \
-    --query 'Configuration.FunctionArn' \
-    --output text)
+# Ask for confirmation
+echo ""
+read -p "Apply these changes? (yes/no): " -r
+echo
+if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    echo "Deployment cancelled"
+    rm -f tfplan
+    exit 0
+fi
 
+# Apply Terraform configuration
+echo ""
+echo "Applying Terraform configuration..."
+terraform apply tfplan
+rm -f tfplan
+
+# Get outputs
 echo ""
 echo "=========================================="
 echo "Deployment Complete!"
 echo "=========================================="
-echo "Function ARN: $FUNCTION_ARN"
+
+FUNCTION_ARN=$(terraform output -raw function_arn)
+FUNCTION_NAME=$(terraform output -raw function_name)
+LOG_GROUP=$(terraform output -raw log_group_name)
+
+echo "Function Name: $FUNCTION_NAME"
+echo "Function ARN:  $FUNCTION_ARN"
+echo "Log Group:     $LOG_GROUP"
 echo ""
 echo "Test the function with:"
+terraform output -raw invoke_command
+echo ""
+echo ""
+echo "Or use the test event file:"
 echo "aws lambda invoke \\"
 echo "  --function-name $FUNCTION_NAME \\"
-echo "  --payload file://test-event.json \\"
-echo "  --region $REGION \\"
-echo "  response.json"
+echo "  --payload file://../test-event.json \\"
+echo "  response.json && cat response.json | jq ."
 echo ""
-echo "cat response.json | jq ."
+echo "View logs:"
+echo "aws logs tail $LOG_GROUP --follow"
 echo "=========================================="

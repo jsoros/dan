@@ -9,12 +9,11 @@ This function checks if an AWS Availability Zone is experiencing issues by:
 
 import json
 import logging
-import os
 from typing import Dict, List, Any
 from datetime import datetime, timedelta
 
 import boto3
-from botocore.exceptions import ClientError, BotoCoreError
+from botocore.exceptions import ClientError
 
 # Configure logging
 logger = logging.getLogger()

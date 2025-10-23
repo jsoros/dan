@@ -74,7 +74,52 @@ The Lambda execution role needs the following permissions:
 
 ## Deployment
 
-### Option 1: AWS Console
+### Prerequisites
+
+- [Terraform](https://www.terraform.io/downloads) >= 1.0
+- [AWS CLI](https://aws.amazon.com/cli/) configured with credentials
+- AWS account with appropriate permissions
+
+### Option 1: Automated Deployment (Recommended)
+
+Use the provided deployment script:
+
+```bash
+# Run the deployment script
+./deploy.sh
+
+# Or with custom configuration
+FUNCTION_NAME=my-az-check AWS_REGION=eu-west-1 ./deploy.sh
+```
+
+The script will:
+1. Initialize Terraform
+2. Create/update terraform.tfvars
+3. Validate the configuration
+4. Show a plan of changes
+5. Apply after confirmation
+
+### Option 2: Manual Terraform Deployment
+
+```bash
+# Navigate to Terraform directory
+cd terraform
+
+# Initialize Terraform
+terraform init
+
+# (Optional) Create terraform.tfvars from example
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your settings
+
+# Plan the deployment
+terraform plan
+
+# Apply the configuration
+terraform apply
+```
+
+### Option 3: AWS Console
 
 1. Create a new Lambda function in the AWS Console
 2. Upload the code:
@@ -82,46 +127,43 @@ The Lambda execution role needs the following permissions:
    zip -r function.zip lambda_function.py
    ```
 3. Upload `function.zip` to Lambda
-4. Set runtime to Python 3.9 or later
+4. Set runtime to Python 3.11 or later
 5. Configure IAM role with required permissions
 6. Set timeout to at least 30 seconds
 
-### Option 2: AWS CLI
+## Terraform Configuration
 
-```bash
-# Create deployment package
-zip -r function.zip lambda_function.py
+The Terraform configuration includes:
 
-# Create IAM role (if not exists)
-aws iam create-role \
-  --role-name AZHealthCheckLambdaRole \
-  --assume-role-policy-document file://trust-policy.json
+- **Lambda Function**: Python 3.11 runtime with configurable timeout and memory
+- **IAM Role**: Execution role with required permissions for EC2 and Health API
+- **CloudWatch Logs**: Log group with configurable retention period
+- **Outputs**: Function ARN, role ARN, and invoke commands
 
-# Attach policies
-aws iam put-role-policy \
-  --role-name AZHealthCheckLambdaRole \
-  --policy-name AZHealthCheckPolicy \
-  --policy-document file://lambda-policy.json
+### Customizable Variables
 
-# Create Lambda function
-aws lambda create-function \
-  --function-name az-health-check \
-  --runtime python3.9 \
-  --role arn:aws:iam::YOUR_ACCOUNT_ID:role/AZHealthCheckLambdaRole \
-  --handler lambda_function.lambda_handler \
-  --zip-file fileb://function.zip \
-  --timeout 30
-```
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `function_name` | Name of the Lambda function | `az-health-check` |
+| `aws_region` | AWS region for deployment | `us-east-1` |
+| `lambda_timeout` | Function timeout in seconds | `30` |
+| `lambda_memory_size` | Memory allocation in MB | `256` |
+| `log_retention_days` | CloudWatch Logs retention | `7` |
+| `tags` | Resource tags | See terraform.tfvars.example |
 
-### Option 3: CloudFormation
+### Terraform State Management
 
-Use the provided `cloudformation-template.yaml`:
+For production use, configure remote state:
 
-```bash
-aws cloudformation create-stack \
-  --stack-name az-health-check \
-  --template-body file://cloudformation-template.yaml \
-  --capabilities CAPABILITY_IAM
+```hcl
+# Add to terraform/versions.tf
+terraform {
+  backend "s3" {
+    bucket = "my-terraform-state"
+    key    = "az-health-check/terraform.tfstate"
+    region = "us-east-1"
+  }
+}
 ```
 
 ## Usage
