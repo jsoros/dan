@@ -12,7 +12,7 @@ const heartbeatBlueprint = async function () {
     // URLs to monitor
     const urls = [
         'https://example.com',
-        'https://api.example.com/health',
+        'https://api.example.com/health'
         // Add more URLs as needed
     ];
 

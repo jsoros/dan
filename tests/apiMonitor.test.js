@@ -66,10 +66,8 @@ describe('API Monitor Canary', () => {
                     };
 
                     const req = client.request(options, (res) => {
-                        let body = '';
-
-                        res.on('data', (chunk) => {
-                            body += chunk;
+                        res.on('data', () => {
+                            // Data received but not used in this test
                         });
 
                         res.on('end', () => {
@@ -117,8 +115,9 @@ describe('API Monitor Canary', () => {
                     const client = urlObj.protocol === 'https:' ? https : http;
 
                     const req = client.request({}, (res) => {
-                        let body = '';
-                        res.on('data', (chunk) => { body += chunk; });
+                        res.on('data', () => {
+                            // Data received but not used in this test
+                        });
                         res.on('end', () => {
                             if (res.statusCode !== endpoint.expectedStatus) {
                                 reject(new Error(

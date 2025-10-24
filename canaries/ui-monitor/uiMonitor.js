@@ -18,7 +18,7 @@ const uiCanaryBlueprint = async function () {
     };
 
     // Launch browser
-    let page = await synthetics.getPage();
+    const page = await synthetics.getPage();
 
     // Configure page
     await page.setViewport({

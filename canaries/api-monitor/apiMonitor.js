@@ -35,7 +35,7 @@ const apiCanaryBlueprint = async function () {
             expectedStatus: 200,
             timeout: 5000,
             headers: {
-                'Content-Type': 'application/json',
+                'Content-Type': 'application/json'
                 // Add authentication headers if needed
                 // 'Authorization': 'Bearer YOUR_TOKEN'
             }
