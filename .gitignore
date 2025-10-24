@@ -232,6 +232,10 @@ yarn-error.log*
 package-lock.json
 yarn.lock
 
+# Test coverage
+coverage/
+*.lcov
+
 # macOS
 .DS_Store
 

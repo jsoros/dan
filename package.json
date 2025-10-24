@@ -1,0 +1,60 @@
+{
+  "name": "aws-synthetics-monitoring",
+  "version": "1.0.0",
+  "description": "AWS CloudWatch Synthetics canaries for monitoring application availability and performance",
+  "main": "index.js",
+  "scripts": {
+    "lint": "eslint canaries/**/*.js tests/**/*.js",
+    "lint:fix": "eslint canaries/**/*.js tests/**/*.js --fix",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:verbose": "jest --verbose",
+    "validate": "npm run lint && npm run test"
+  },
+  "keywords": [
+    "aws",
+    "cloudwatch",
+    "synthetics",
+    "monitoring",
+    "canary",
+    "puppeteer"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/jest": "^29.5.11",
+    "eslint": "^8.56.0",
+    "eslint-config-standard": "^17.1.0",
+    "eslint-plugin-import": "^2.29.1",
+    "eslint-plugin-jest": "^27.6.3",
+    "eslint-plugin-n": "^16.6.2",
+    "eslint-plugin-promise": "^6.1.1",
+    "jest": "^29.7.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "coverageDirectory": "coverage",
+    "collectCoverageFrom": [
+      "canaries/**/*.js",
+      "!canaries/**/node_modules/**"
+    ],
+    "testMatch": [
+      "**/tests/**/*.test.js"
+    ],
+    "setupFilesAfterEnv": [
+      "<rootDir>/tests/setup.js"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "branches": 70,
+        "functions": 70,
+        "lines": 70,
+        "statements": 70
+      }
+    }
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

@@ -1,0 +1,7 @@
+node_modules/
+coverage/
+terraform/
+*.json
+*.md
+.terraform/
+terraform/canary-artifacts/

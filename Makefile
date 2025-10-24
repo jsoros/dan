@@ -1,15 +1,62 @@
-.PHONY: help init plan apply destroy validate fmt clean
+.PHONY: help init plan apply destroy validate fmt clean install lint lint-fix test test-watch test-coverage ci
 
 # Default target
 help:
 	@echo "Available targets:"
+	@echo ""
+	@echo "Development:"
+	@echo "  install      - Install npm dependencies"
+	@echo "  lint         - Run ESLint on canary scripts"
+	@echo "  lint-fix     - Run ESLint and fix issues automatically"
+	@echo "  test         - Run Jest unit tests"
+	@echo "  test-watch   - Run Jest in watch mode"
+	@echo "  test-coverage - Run tests with coverage report"
+	@echo "  ci           - Run linting and tests (CI pipeline)"
+	@echo ""
+	@echo "Terraform:"
 	@echo "  init      - Initialize Terraform"
 	@echo "  validate  - Validate Terraform configuration"
 	@echo "  fmt       - Format Terraform files"
 	@echo "  plan      - Plan infrastructure changes"
 	@echo "  apply     - Apply infrastructure changes"
 	@echo "  destroy   - Destroy infrastructure"
+	@echo ""
+	@echo "Cleanup:"
 	@echo "  clean     - Clean temporary files"
+
+# Install npm dependencies
+install:
+	@echo "Installing npm dependencies..."
+	npm install
+
+# Run ESLint
+lint:
+	@echo "Running ESLint..."
+	npm run lint
+
+# Run ESLint with auto-fix
+lint-fix:
+	@echo "Running ESLint with auto-fix..."
+	npm run lint:fix
+
+# Run Jest tests
+test:
+	@echo "Running Jest tests..."
+	npm test
+
+# Run Jest in watch mode
+test-watch:
+	@echo "Running Jest in watch mode..."
+	npm run test:watch
+
+# Run tests with coverage
+test-coverage:
+	@echo "Running tests with coverage..."
+	npm run test:coverage
+
+# Run CI pipeline (lint + test)
+ci: lint test
+	@echo "✅ All CI checks passed!"
 
 # Initialize Terraform
 init:

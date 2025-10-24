@@ -38,6 +38,7 @@ AWS CloudWatch Synthetics allows you to create canaries (configurable scripts) t
 
 ## Prerequisites
 
+- [Node.js](https://nodejs.org/) >= 14.0.0 (for development and testing)
 - [Terraform](https://www.terraform.io/downloads.html) >= 1.0
 - AWS account with appropriate permissions
 - AWS CLI configured with credentials
@@ -246,13 +247,87 @@ See [AWS Pricing](https://aws.amazon.com/cloudwatch/pricing/) for details.
 
 ## Development
 
+### Setup Development Environment
+
+Install Node.js dependencies:
+
+```bash
+npm install
+# Or
+make install
+```
+
+### Code Quality
+
+#### Linting
+
+The project uses ESLint to enforce code quality and style:
+
+```bash
+# Run linting
+npm run lint
+# Or
+make lint
+
+# Auto-fix linting issues
+npm run lint:fix
+# Or
+make lint-fix
+```
+
+ESLint configuration is in `.eslintrc.json` and follows the Standard JavaScript style guide.
+
+#### Unit Testing
+
+The project uses Jest for unit testing:
+
+```bash
+# Run all tests
+npm test
+# Or
+make test
+
+# Run tests in watch mode (for development)
+npm run test:watch
+# Or
+make test-watch
+
+# Run tests with coverage report
+npm run test:coverage
+# Or
+make test-coverage
+```
+
+Tests are located in the `tests/` directory. See [tests/README.md](tests/README.md) for detailed testing documentation.
+
+**Coverage Requirements:**
+- Branches: 70%
+- Functions: 70%
+- Lines: 70%
+- Statements: 70%
+
+#### Continuous Integration
+
+The project uses GitHub Actions for CI/CD:
+
+```bash
+# Run the same checks as CI locally
+npm run validate
+# Or
+make ci
+```
+
+This runs both linting and tests. All checks must pass before merging PRs.
+
 ### Adding New Canaries
 
 1. Create canary script in `canaries/<name>/`
-2. Add archive and S3 upload resources in `terraform/main.tf`
-3. Add canary resource in `terraform/main.tf`
-4. Add CloudWatch alarms in `terraform/cloudwatch_alarms.tf`
-5. Update outputs in `terraform/outputs.tf`
+2. Add unit tests in `tests/<name>.test.js`
+3. Run linting and tests to ensure quality
+4. Add archive and S3 upload resources in `terraform/main.tf`
+5. Add canary resource in `terraform/main.tf`
+6. Add CloudWatch alarms in `terraform/cloudwatch_alarms.tf`
+7. Update outputs in `terraform/outputs.tf`
 
 ### Testing Locally
 
@@ -263,7 +338,12 @@ Canaries use AWS Lambda runtime, so local testing is limited. However, you can:
 node canaries/api-monitor/apiMonitor.js
 ```
 
-2. Use AWS SAM for local Lambda testing (requires additional setup)
+2. Run unit tests (recommended):
+```bash
+npm test
+```
+
+3. Use AWS SAM for local Lambda testing (requires additional setup)
 
 ## Cleanup
 
