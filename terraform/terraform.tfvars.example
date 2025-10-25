@@ -1,0 +1,26 @@
+# Example Terraform variables file
+# Copy this to terraform.tfvars and customize as needed
+
+function_name      = "az-health-check"
+aws_region        = "us-east-1"
+lambda_timeout    = 30
+lambda_memory_size = 256
+log_retention_days = 365  # 1 year retention for compliance
+
+# Security and monitoring settings
+enable_xray_tracing           = true
+reserved_concurrent_executions = -1  # -1 means unreserved (unlimited concurrency)
+
+# Optional: KMS encryption for logs and environment variables
+# kms_key_arn = "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012"
+
+# Optional: Dead Letter Queue configuration
+# enable_dlq     = true
+# dlq_target_arn = "arn:aws:sqs:us-east-1:123456789012:az-health-check-dlq"
+
+tags = {
+  Name        = "az-health-check"
+  Purpose     = "AZ Health Monitoring"
+  Environment = "production"
+  ManagedBy   = "Terraform"
+}
