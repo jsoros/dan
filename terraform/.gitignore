@@ -1,3 +1,12 @@
+# Terraform files
+*.tfstate
+*.tfstate.*
+*.tfvars
+!terraform.tfvars.example
+.terraform/
+.terraform.lock.hcl
+crash.log
+crash.*.log
 # Local .terraform directories
 **/.terraform/*
 
@@ -19,6 +28,16 @@ override.tf.json
 *_override.tf
 *_override.tf.json
 
+# Canary artifacts
+canary-artifacts/
+*.zip
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
 # Ignore CLI configuration files
 .terraformrc
 terraform.rc
