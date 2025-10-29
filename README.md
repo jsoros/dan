@@ -1,394 +1,389 @@
-# AWS Synthetic Monitoring
+# AWS Availability Zone Health Check Lambda
 
-This repository contains sample AWS CloudWatch Synthetics canaries for monitoring application availability and performance. The canaries use Puppeteer to test web applications and APIs, taking screenshots and collecting performance metrics.
+A Lambda function that determines if an AWS Availability Zone is experiencing issues by checking AWS Health API and EC2 status.
 
-## Overview
+## Features
 
-AWS CloudWatch Synthetics allows you to create canaries (configurable scripts) that run on a schedule to monitor your endpoints and APIs. This project includes:
+- **Health API Integration**: Queries AWS Health API for AZ-specific events and incidents
+- **EC2 Status Monitoring**: Checks AZ state and availability through EC2 API
+- **Severity Classification**: Categorizes issues as healthy, degraded, or unhealthy
+- **Event Analysis**: Distinguishes between critical events and warnings
+- **Comprehensive Logging**: Detailed CloudWatch logs for troubleshooting
 
-- **API Monitor**: Tests REST API endpoints for availability and response times
-- **UI Monitor**: Performs visual monitoring of web pages using Puppeteer
-- **Heartbeat**: Simple health checks for basic uptime monitoring
+## How It Works
 
-## Architecture
+The Lambda function performs the following checks:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     AWS CloudWatch                          │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │ API Monitor  │  │  UI Monitor  │  │  Heartbeat   │      │
-│  │   Canary     │  │    Canary    │  │    Canary    │      │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘      │
-│         │                 │                 │               │
-│         └─────────────────┴─────────────────┘               │
-│                           │                                 │
-│         ┌─────────────────┴─────────────────┐               │
-│         │                                   │               │
-│    ┌────▼─────┐                      ┌──────▼─────┐        │
-│    │    S3    │                      │ CloudWatch │        │
-│    │ Artifacts│                      │   Alarms   │        │
-│    └──────────┘                      └──────┬─────┘        │
-│                                             │               │
-│                                      ┌──────▼─────┐        │
-│                                      │    SNS     │        │
-│                                      │   Alerts   │        │
-│                                      └────────────┘        │
-└─────────────────────────────────────────────────────────────┘
-```
+1. **EC2 AZ Status**: Verifies the AZ exists and is in "available" state
+2. **Health Events**: Queries AWS Health API for recent events (last 7 days)
+3. **Event Classification**: Categorizes events by severity
+4. **Health Analysis**: Aggregates findings to determine overall AZ health
+
+## Health Status Levels
+
+- **healthy**: AZ is operating normally with no issues
+- **degraded**: AZ has warnings or non-critical events
+- **unhealthy**: AZ has critical issues or is not available
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) >= 14.0.0 (for development and testing)
-- [Terraform](https://www.terraform.io/downloads.html) >= 1.0
-- AWS account with appropriate permissions
-- AWS CLI configured with credentials
+### AWS Support Plan
 
-## Quick Start
+AWS Health API requires either:
+- AWS Business Support plan, or
+- AWS Enterprise Support plan
 
-### 1. Clone the Repository
+Without these, the function will still check EC2 AZ status but won't retrieve Health API events.
 
-```bash
-git clone <repository-url>
-cd dan
-```
+### IAM Permissions
 
-### 2. Configure Variables
+The Lambda execution role needs the following permissions:
 
-Copy the example variables file and customize it:
-
-```bash
-cp terraform/terraform.tfvars.example terraform/terraform.tfvars
-```
-
-Edit `terraform/terraform.tfvars` and set your values:
-
-```hcl
-aws_region  = "us-east-1"
-environment = "dev"
-alert_email = "your-email@example.com"
-```
-
-### 3. Customize Canary Scripts
-
-Before deploying, customize the canary scripts for your endpoints:
-
-**API Monitor** (`canaries/api-monitor/apiMonitor.js`):
-```javascript
-const endpoints = [
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
     {
-        name: 'Your API Health Check',
-        url: 'https://your-api.example.com/health',
-        expectedStatus: 200,
-        timeout: 5000
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeAvailabilityZones"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "health:DescribeEvents",
+        "health:DescribeEventDetails",
+        "health:DescribeAffectedEntities"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:*:*:*"
     }
-];
+  ]
+}
 ```
 
-**UI Monitor** (`canaries/ui-monitor/uiMonitor.js`):
-```javascript
-const config = {
-    url: 'https://your-website.example.com',
-    viewportWidth: 1920,
-    viewportHeight: 1080
-};
-```
+## Deployment
 
-**Heartbeat** (`canaries/heartbeat/heartbeat.js`):
-```javascript
-const urls = [
-    'https://your-website.example.com',
-    'https://your-api.example.com/health'
-];
-```
+### Prerequisites
 
-### 4. Deploy Infrastructure
+- [Terraform](https://www.terraform.io/downloads) >= 1.0
+- [AWS CLI](https://aws.amazon.com/cli/) configured with credentials
+- AWS account with appropriate permissions
 
-Using Make:
+### Option 1: Automated Deployment (Recommended)
+
+Use the provided deployment script:
+
 ```bash
-make init
-make plan
-make apply
+# Run the deployment script
+./deploy.sh
+
+# Or with custom configuration
+FUNCTION_NAME=my-az-check AWS_REGION=eu-west-1 ./deploy.sh
 ```
 
-Or using Terraform directly:
+The script will:
+1. Initialize Terraform
+2. Create/update terraform.tfvars
+3. Validate the configuration
+4. Show a plan of changes
+5. Apply after confirmation
+
+### Option 2: Manual Terraform Deployment
+
 ```bash
+# Navigate to Terraform directory
 cd terraform
+
+# Initialize Terraform
 terraform init
+
+# (Optional) Create terraform.tfvars from example
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your settings
+
+# Plan the deployment
 terraform plan
+
+# Apply the configuration
 terraform apply
 ```
 
-### 5. Confirm SNS Subscription
+### Option 3: AWS Console
 
-After deployment, you'll receive an email to confirm your SNS subscription for alerts. Click the confirmation link in the email.
+1. Create a new Lambda function in the AWS Console
+2. Upload the code:
+   ```bash
+   zip -r function.zip lambda_function.py
+   ```
+3. Upload `function.zip` to Lambda
+4. Set runtime to Python 3.11 or later
+5. Configure IAM role with required permissions
+6. Set timeout to at least 30 seconds
 
-## Canary Details
+## Terraform Configuration
 
-### API Monitor
+The Terraform configuration includes:
 
-- **Purpose**: Monitor REST API endpoints
-- **Schedule**: Every 5 minutes (configurable)
-- **Timeout**: 60 seconds
-- **Features**:
-  - Validates HTTP status codes
-  - Measures response times
-  - Optional response content validation
-  - Supports custom headers (e.g., authentication)
+- **Lambda Function**: Python 3.11 runtime with configurable timeout and memory
+- **IAM Role**: Execution role with required permissions for EC2 and Health API
+- **CloudWatch Logs**: Log group with configurable retention period
+- **Outputs**: Function ARN, role ARN, and invoke commands
 
-### UI Monitor
+### Customizable Variables
 
-- **Purpose**: Visual monitoring of web applications
-- **Schedule**: Every 15 minutes (configurable)
-- **Timeout**: 120 seconds
-- **Features**:
-  - Takes screenshots of pages
-  - Validates UI elements
-  - Tests responsive design (desktop/mobile)
-  - Collects performance metrics
-  - Tests user interactions (e.g., search)
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `function_name` | Name of the Lambda function | `az-health-check` |
+| `aws_region` | AWS region for deployment | `us-east-1` |
+| `lambda_timeout` | Function timeout in seconds | `30` |
+| `lambda_memory_size` | Memory allocation in MB | `256` |
+| `log_retention_days` | CloudWatch Logs retention | `7` |
+| `tags` | Resource tags | See terraform.tfvars.example |
 
-### Heartbeat
+### Terraform State Management
 
-- **Purpose**: Simple uptime monitoring
-- **Schedule**: Every 5 minutes (configurable)
-- **Timeout**: 30 seconds
-- **Features**:
-  - Checks basic availability
-  - Minimal resource usage
-  - Fast execution
+For production use, configure remote state:
 
-## CloudWatch Alarms
-
-The deployment includes CloudWatch alarms for:
-
-1. **Success Rate**: Triggers when success rate drops below threshold (default: 90%)
-2. **Response Time**: Triggers when API response time exceeds threshold (default: 10 seconds)
-
-All alarms send notifications to the configured SNS topic.
-
-## Viewing Results
-
-### CloudWatch Console
-
-Access the Synthetics console:
-```
-https://console.aws.amazon.com/cloudwatch/home?region=<region>#synthetics:canary/list
-```
-
-Or get the URL from Terraform output:
-```bash
-cd terraform
-terraform output cloudwatch_dashboard_url
-```
-
-### S3 Artifacts
-
-Screenshots, logs, and HAR files are stored in the S3 bucket:
-```bash
-aws s3 ls s3://$(terraform output -raw canary_bucket_name)/
-```
-
-## Configuration
-
-### Schedule Expressions
-
-Canaries support two types of schedule expressions:
-
-**Rate expressions**:
 ```hcl
-rate(5 minutes)
-rate(1 hour)
-rate(1 day)
+# Add to terraform/versions.tf
+terraform {
+  backend "s3" {
+    bucket = "my-terraform-state"
+    key    = "az-health-check/terraform.tfstate"
+    region = "us-east-1"
+  }
+}
 ```
 
-**Cron expressions**:
-```hcl
-cron(0 */5 * * ? *)   # Every 5 hours
-cron(0 0 * * ? *)     # Daily at midnight
-cron(0 12 * * MON-FRI *) # Weekdays at noon
+## Usage
+
+### Input Event Format
+
+```json
+{
+  "availability_zone": "us-east-1a",
+  "region": "us-east-1"
+}
 ```
 
-### Retention Periods
+**Parameters:**
+- `availability_zone` (required): AZ name (e.g., "us-east-1a", "eu-west-1b")
+- `region` (optional): AWS region; if omitted, inferred from AZ name
 
-- `artifact_retention_days`: Days to keep artifacts in S3 (default: 30)
-- `success_retention_days`: Days to keep successful runs (default: 31)
-- `failure_retention_days`: Days to keep failed runs (default: 31)
+### Response Format
 
-## Costs
+#### Healthy AZ Example
 
-CloudWatch Synthetics pricing (as of 2024):
-- $0.0012 per canary run
-- Example: 1 canary running every 5 minutes = ~8,640 runs/month = ~$10.37/month
-- S3 storage costs for artifacts
-- CloudWatch Logs storage costs
+```json
+{
+  "availability_zone": "us-east-1a",
+  "region": "us-east-1",
+  "timestamp": "2025-10-23T15:30:00.123456",
+  "health": {
+    "status": "healthy",
+    "severity": "healthy",
+    "message": "AZ is healthy",
+    "issues": [],
+    "critical_events": [],
+    "warning_events": [],
+    "az_info": {
+      "exists": true,
+      "zone_name": "us-east-1a",
+      "zone_id": "use1-az1",
+      "state": "available",
+      "region": "us-east-1",
+      "messages": [],
+      "network_border_group": "us-east-1"
+    }
+  }
+}
+```
 
-See [AWS Pricing](https://aws.amazon.com/cloudwatch/pricing/) for details.
+#### Unhealthy AZ Example
+
+```json
+{
+  "availability_zone": "us-east-1a",
+  "region": "us-east-1",
+  "timestamp": "2025-10-23T15:30:00.123456",
+  "health": {
+    "status": "unhealthy",
+    "severity": "critical",
+    "message": "AZ is unhealthy",
+    "issues": [
+      "Critical event: AWS_EC2_INSTANCE_STORE_DRIVE_PERFORMANCE_DEGRADED - EC2"
+    ],
+    "critical_events": [
+      {
+        "arn": "arn:aws:health:us-east-1::event/EC2/AWS_EC2_INSTANCE_STORE_DRIVE_PERFORMANCE_DEGRADED/...",
+        "service": "EC2",
+        "event_type_code": "AWS_EC2_INSTANCE_STORE_DRIVE_PERFORMANCE_DEGRADED",
+        "event_type_category": "issue",
+        "status": "open",
+        "start_time": "2025-10-23T14:00:00",
+        "end_time": null,
+        "last_updated": "2025-10-23T15:00:00"
+      }
+    ],
+    "warning_events": [],
+    "az_info": {
+      "exists": true,
+      "zone_name": "us-east-1a",
+      "zone_id": "use1-az1",
+      "state": "available",
+      "region": "us-east-1",
+      "messages": [],
+      "network_border_group": "us-east-1"
+    }
+  }
+}
+```
+
+### Invoking the Function
+
+#### AWS CLI
+
+```bash
+aws lambda invoke \
+  --function-name az-health-check \
+  --payload '{"availability_zone":"us-east-1a"}' \
+  response.json
+
+cat response.json
+```
+
+#### Python (boto3)
+
+```python
+import boto3
+import json
+
+lambda_client = boto3.client('lambda')
+
+response = lambda_client.invoke(
+    FunctionName='az-health-check',
+    InvocationType='RequestResponse',
+    Payload=json.dumps({
+        'availability_zone': 'us-east-1a'
+    })
+)
+
+result = json.loads(response['Payload'].read())
+print(json.dumps(result, indent=2))
+```
+
+#### EventBridge Rule (Scheduled Check)
+
+Create an EventBridge rule to check AZ health periodically:
+
+```bash
+# Create rule to run every 5 minutes
+aws events put-rule \
+  --name az-health-check-schedule \
+  --schedule-expression "rate(5 minutes)"
+
+# Add Lambda as target
+aws events put-targets \
+  --rule az-health-check-schedule \
+  --targets "Id"="1","Arn"="arn:aws:lambda:REGION:ACCOUNT:function:az-health-check","Input"='{"availability_zone":"us-east-1a"}'
+
+# Grant EventBridge permission to invoke Lambda
+aws lambda add-permission \
+  --function-name az-health-check \
+  --statement-id AllowEventBridgeInvoke \
+  --action lambda:InvokeFunction \
+  --principal events.amazonaws.com \
+  --source-arn arn:aws:events:REGION:ACCOUNT:rule/az-health-check-schedule
+```
+
+## Testing Locally
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the test
+python lambda_function.py
+```
+
+## Monitoring
+
+The function logs to CloudWatch Logs. Key log messages include:
+
+- AZ health check initiation
+- Number of health events found
+- Health status determination
+- Any errors encountered
+
+### CloudWatch Metrics
+
+Consider creating custom metrics based on the function's output:
+
+```python
+import boto3
+
+cloudwatch = boto3.client('cloudwatch')
+
+# Publish custom metric
+cloudwatch.put_metric_data(
+    Namespace='AZHealth',
+    MetricData=[
+        {
+            'MetricName': 'AZHealthStatus',
+            'Value': 1 if status == 'healthy' else 0,
+            'Unit': 'None',
+            'Dimensions': [
+                {'Name': 'AvailabilityZone', 'Value': 'us-east-1a'}
+            ]
+        }
+    ]
+)
+```
+
+## Use Cases
+
+1. **Automated Monitoring**: Schedule regular health checks via EventBridge
+2. **Pre-Deployment Validation**: Check AZ health before deploying resources
+3. **Incident Response**: Quick AZ health assessment during outages
+4. **Multi-AZ Validation**: Check all AZs in a region for balanced deployments
+5. **Integration with Alerting**: Trigger alerts when AZ issues are detected
+
+## Limitations
+
+- AWS Health API is only available in `us-east-1` region
+- Health API requires Business or Enterprise Support plan
+- Health events are limited to the last 7 days
+- Some AZ issues may not be reflected in Health API immediately
 
 ## Troubleshooting
 
-### Canary Fails to Start
+### "SubscriptionRequiredException" Error
 
-1. Check IAM role permissions
-2. Verify S3 bucket exists and is accessible
-3. Check canary logs in CloudWatch Logs
+This means you don't have AWS Business or Enterprise Support. The function will still work but won't fetch Health API events.
 
-### High Failure Rate
+### Permission Denied Errors
 
-1. Review canary logs in CloudWatch
-2. Check if monitored endpoints are accessible
-3. Verify timeout settings are appropriate
-4. Ensure network connectivity (VPC configuration if needed)
+Ensure the Lambda execution role has the required IAM permissions listed above.
 
-### No Alerts Received
+### Timeout Errors
 
-1. Confirm SNS subscription in email
-2. Check SNS topic subscription status
-3. Verify alarm thresholds are correctly configured
+Increase the Lambda timeout setting (recommended: 30-60 seconds).
 
-## Development
+## Contributing
 
-### Setup Development Environment
-
-Install Node.js dependencies:
-
-```bash
-npm install
-# Or
-make install
-```
-
-### Code Quality
-
-#### Linting
-
-The project uses ESLint to enforce code quality and style:
-
-```bash
-# Run linting
-npm run lint
-# Or
-make lint
-
-# Auto-fix linting issues
-npm run lint:fix
-# Or
-make lint-fix
-```
-
-ESLint configuration is in `.eslintrc.json` and follows the Standard JavaScript style guide.
-
-#### Unit Testing
-
-The project uses Jest for unit testing:
-
-```bash
-# Run all tests
-npm test
-# Or
-make test
-
-# Run tests in watch mode (for development)
-npm run test:watch
-# Or
-make test-watch
-
-# Run tests with coverage report
-npm run test:coverage
-# Or
-make test-coverage
-```
-
-Tests are located in the `tests/` directory. See [tests/README.md](tests/README.md) for detailed testing documentation.
-
-**Coverage Requirements:**
-- Branches: 70%
-- Functions: 70%
-- Lines: 70%
-- Statements: 70%
-
-#### Continuous Integration
-
-The project uses GitHub Actions for CI/CD:
-
-```bash
-# Run the same checks as CI locally
-npm run validate
-# Or
-make ci
-```
-
-This runs both linting and tests. All checks must pass before merging PRs.
-
-### Adding New Canaries
-
-1. Create canary script in `canaries/<name>/`
-2. Add unit tests in `tests/<name>.test.js`
-3. Run linting and tests to ensure quality
-4. Add archive and S3 upload resources in `terraform/main.tf`
-5. Add canary resource in `terraform/main.tf`
-6. Add CloudWatch alarms in `terraform/cloudwatch_alarms.tf`
-7. Update outputs in `terraform/outputs.tf`
-
-### Testing Locally
-
-Canaries use AWS Lambda runtime, so local testing is limited. However, you can:
-
-1. Validate syntax:
-```bash
-node canaries/api-monitor/apiMonitor.js
-```
-
-2. Run unit tests (recommended):
-```bash
-npm test
-```
-
-3. Use AWS SAM for local Lambda testing (requires additional setup)
-
-## Cleanup
-
-To destroy all resources:
-
-```bash
-make destroy
-```
-
-Or:
-```bash
-cd terraform
-terraform destroy
-```
-
-**Warning**: This will delete all canaries, alarms, and artifacts.
-
-## Security Considerations
-
-1. **Secrets Management**: Use AWS Secrets Manager or Parameter Store for API keys/tokens
-2. **IAM Permissions**: Follow principle of least privilege
-3. **S3 Bucket**: Public access is blocked by default
-4. **Network Security**: Configure VPC if monitoring internal resources
-5. **Sensitive Data**: Canaries may capture screenshots/logs - ensure compliance
-
-## Best Practices
-
-1. **Monitoring Frequency**: Balance between coverage and cost
-2. **Timeout Values**: Set appropriate timeouts for each canary type
-3. **Alert Thresholds**: Tune to reduce false positives
-4. **Retention Periods**: Keep failure data longer for debugging
-5. **Tagging**: Use consistent tags for cost allocation
-6. **Documentation**: Keep canary scripts well-documented
-
-## Resources
-
-- [AWS CloudWatch Synthetics Documentation](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch_Synthetics_Canaries.html)
-- [Synthetics Runtime Versions](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch_Synthetics_Canaries_Library.html)
-- [Puppeteer Documentation](https://pptr.dev/)
-- [Terraform AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
+Contributions welcome! Please ensure code follows best practices for security and error handling.
 
 ## License
 
 See LICENSE file for details.
-
-## Contributing
-
-Contributions are welcome! Please open an issue or submit a pull request.

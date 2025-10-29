@@ -1,0 +1,22 @@
+# Checkov configuration for AZ Health Check Lambda
+#
+# This file documents acceptable security check exceptions
+
+skip-check:
+  # CKV_AWS_355: IAM policies with wildcard resources
+  # Rationale: AWS Health API and EC2 DescribeAvailabilityZones do not support resource-level permissions.
+  # The actions health:*, ec2:DescribeAvailabilityZones, and xray:* require wildcard resources.
+  - id: CKV_AWS_355
+    comment: "Health API, EC2 Describe, and X-Ray actions don't support resource-level permissions"
+
+  # CKV_AWS_272: Lambda code signing
+  # Rationale: Code signing is an advanced security feature that requires additional infrastructure setup.
+  # It's optional and can be enabled later if needed via AWS Signer.
+  - id: CKV_AWS_272
+    comment: "Code signing is optional and can be enabled separately if required"
+
+  # CKV_AWS_117: Lambda in VPC
+  # Rationale: This Lambda function only calls AWS APIs (Health, EC2, CloudWatch) and doesn't need
+  # access to VPC resources. Running in VPC would add unnecessary complexity and cold start time.
+  - id: CKV_AWS_117
+    comment: "VPC not required - function only calls AWS APIs, no VPC resources accessed"
